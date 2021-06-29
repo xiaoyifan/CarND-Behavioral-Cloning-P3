@@ -3,6 +3,7 @@ import base64
 from datetime import datetime
 import os
 import shutil
+import cv2
 
 import numpy as np
 import socketio
@@ -47,6 +48,15 @@ controller = SimplePIController(0.1, 0.002)
 set_speed = 9
 controller.set_desired(set_speed)
 
+def resize(image, new_dim):
+	return cv2.resize(image, new_dim, interpolation = cv2.INTER_AREA)
+
+def crop(image, top_pixels, bottom_pixel):
+    top = top_pixels
+#     print(type(image))
+    bottom = image.shape[0] - bottom_pixel
+
+    return image[top:bottom, :]
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -61,9 +71,15 @@ def telemetry(sid, data):
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
-        steering_angle = float(model.predict(image_array[None, :, :, :], batch_size=1))
 
-        throttle = controller.update(float(speed))
+        image_array = crop(image_array, 50, 20)
+        image_array = resize(image_array, new_dim=(64, 64))
+        image_array = (image_array / 255.0) - 0.5
+
+        transformed_image_array = image_array[None, :, :, :]        
+        steering_angle = float(model.predict(transformed_image_array, batch_size=1))
+
+        throttle = 0.2
 
         print(steering_angle, throttle)
         send_control(steering_angle, throttle)
